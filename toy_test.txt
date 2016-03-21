@@ -1,0 +1,23 @@
+Detection of protein-protein interactions has previously been a balance between specificity ( background reduction ) and affinity ( detection of weak interactions ) .
+Recently , the introduction of stable isotope labeling ,
+to distinguish specific from unspecific interaction partners ( Blagoev et al , 2003 ; Ranish et al , 2003 )
+Based on this principle , we have developed a proteomic screen for peptide motif-based interactions ( Schulze and Mann , 2004 ) .
+Using synthetic peptide pairs in phosphorylated and unphosphorylated form
+, pull-down experiments are performed to enrich specific binding partners to the phosphorylated bait peptides .
+These proteins are subsequently identified and quantified by mass spectrometry .
+In this study , by further method development , we greatly increased the throughput of the analysis allowing
+us to profile the entire phosphotyrosine interactome of the ErbB-receptor family
+
+Two recent reports suggested a correlation between p130CAS phosphorylation level and cell migration rate .
+In both studies , a kinase was transfected in the cells .
+One used v-Src , for which p130CAS is a direct substrate ( Fincham and Frame , 1998 ) ,
+while the other overexpressed FAK , that , once activated , binds both c-Src and its substrate p130CAS ( Cary et al. , 1998 )
+In both studies , hyperphosphorylation of p130CAS was associated with an increase in rate of migration .
+Since p130CAS is a substrate for PTP-PEST ( Garton et al. , 1996 )
+, removal of this PTP results in hyperphosphorylation of p130CAS ( Cote et al. , 1998 ) .
+We decided
+to investigate whether the absence of this PTP would result in a change in the motility of these cells
+The two cell lines used were heterozygous and homozygous for the PTP-PEST deletion .
+To minimize any dominant negative effects from the targeted allele
+, comparisons were made between the homozygous and the heterozygous cell lines .
+
