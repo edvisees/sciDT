@@ -1,6 +1,5 @@
 import sys
 import codecs
-import cPickle
 import numpy
 import argparse
 import theano
@@ -12,8 +11,6 @@ from util import read_passages, evaluate, make_folds
 from keras.models import Sequential, Graph, model_from_json
 from keras.layers.core import TimeDistributedDense, Dropout
 from keras.layers.recurrent import LSTM, GRU
-
-#from seya.layers.recurrent import Bidirectional
 
 from attention import TensorAttention
 from keras_extensions import HigherOrderTimeDistributedDense
@@ -153,10 +150,9 @@ class PassageTagger(object):
         print >>sys.stderr, "Attention input shape:", att_input_shape
         tagger.add(Dropout(0.5))
         tagger.add(TensorAttention(att_input_shape, context=att_context))
-        #tagger.add(Dropout(0.5))
       else:
         _, input_len, input_dim = X.shape
-        tagger.add(TimeDistributedDense(input_dim=input_dim, output_dim=word_proj_dim))
+        tagger.add(TimeDistributedDense(input_dim=input_dim, input_length=input_len, output_dim=word_proj_dim))
       tagger.add(LSTM(input_dim=word_proj_dim, output_dim=word_proj_dim, input_length=input_len, return_sequences=True))
       tagger.add(TimeDistributedDense(num_classes, activation='softmax'))
       print >>sys.stderr, tagger.summary()
@@ -201,32 +197,41 @@ class PassageTagger(object):
     print >>model_config_file, self.tagger.to_json()
     self.tagger.save_weights(model_weights_file_name)
     json.dump(self.label_ind, open(model_label_ind, "w"))
-    #model_file = open("model_%s.pkl"%model_ext, "w")
-    #cPickle.dump(self.tagger, model_file)
 
 if __name__ == "__main__":
   argparser = argparse.ArgumentParser(description="Train, cross-validate and run LSTM discourse tagger")
-  argparser.add_argument('repfile', metavar='REP-FILE', type=str, help="Gzipped embedding file")
-  argparser.add_argument('infile', metavar='INPUT-FILE', type=str, help="Training or test file. One clause per line and passages separated by blank lines. Train file should have clause<tab>label in each line.")
-  argparser.add_argument('--train', help="Train?", action='store_true')
-  argparser.add_argument('--test_files', type=str, nargs='+', help="Test file(s)")
+  argparser.add_argument('repfile', metavar='REP-FILE', type=str, help="Gzipped word embedding file")
+  argparser.add_argument('--train_file', type=str, help="Training file. One clause<tab>label per line and passages separated by blank lines.")
+  argparser.add_argument('--test_files', metavar="TESTFILE", type=str, nargs='+', help="Test file name(s), separated by space. One clause per line and passages separated by blank lines.")
   argparser.add_argument('--use_attention', help="Use attention over words? Or else will average their representations", action='store_true')
-  argparser.add_argument('--att_context', type=str, help="Context to look at for determining attention (word/clause/para)")
+  argparser.add_argument('--att_context', type=str, help="Context to look at for determining attention (word/clause)")
   argparser.set_defaults(att_context='word')
   argparser.add_argument('--bidirectional', help="Bidirectional LSTM", action='store_true')
+  argparser.add_argument('--show_attention', help="When testing, if using attention, also print the weights", action='store_true')
   args = argparser.parse_args()
   repfile = args.repfile
-  infile = args.infile
-  train = args.train
+  if args.train_file:
+    trainfile = args.train_file
+    train = True
+  else:
+    train = False
+  if args.test_files:
+    testfiles = args.test_files
+    test = True
+  else:
+    test = False
+  if not train and not test:
+    raise RuntimeError, "Please specify a train file or test files."
   use_attention = args.use_attention
   att_context = args.att_context
   bid = args.bidirectional
+  show_att = args.show_attention
 
   nnt = PassageTagger(repfile)
   if train:
-    X, Y = nnt.make_data(infile, use_attention, train=True)
+    X, Y = nnt.make_data(trainfile, use_attention, train=True)
     nnt.train(X, Y, use_attention, att_context, bid, cv=False)
-  if args.test_files:
+  if test:
     if train:
       label_ind = nnt.label_ind
     else:
@@ -243,22 +248,32 @@ if __name__ == "__main__":
       label_ind_json = json.load(open(model_label_ind))
       label_ind = {k: int(label_ind_json[k]) for k in label_ind_json}
       print >>sys.stderr, "Loaded label index:", label_ind
-    for l in nnt.tagger.layers:
-      if l.name == "tensorattention":
-        maxseqlen, maxclauselen = l.td1, l.td2
-        break
-    for test_file in args.test_files:
+    if not use_attention:
+      assert nnt.tagger.layers[0].name == "timedistributeddense"
+      maxseqlen = nnt.tagger.layers[0].input_length
+      maxclauselen = None
+    else:
+      for l in nnt.tagger.layers:
+        if l.name == "tensorattention":
+          maxseqlen, maxclauselen = l.td1, l.td2
+          break
+    for test_file in testfiles:
       print >>sys.stderr, "Predicting on file %s"%(test_file)
       test_out_file_name = test_file.split("/")[-1].replace(".txt", "")+"_att=%s_cont=%s_bid=%s"%(str(use_attention), att_context, str(bid))+".out"
       outfile = open(test_out_file_name, "w")
       X_test, _ = nnt.make_data(test_file, use_attention, maxseqlen=maxseqlen, maxclauselen=maxclauselen, label_ind=label_ind, train=False)
       print >>sys.stderr, "X_test shape:", X_test.shape
       pred_probs, pred_label_seqs, _ = nnt.predict(X_test, bid)
-      if use_attention:
+      if show_att:
         att_weights = nnt.get_attention_weights(X_test.astype('float32'))
         clause_seqs, _ = read_passages(test_file, False)
         paralens = [[len(clause.split()) for clause in seq] for seq in clause_seqs]
         for clauselens, sample_att_weights, pred_label_seq in zip(paralens, att_weights, pred_label_seqs):
           for clauselen, clause_weights, pred_label in zip(clauselens, sample_att_weights[-len(clauselens):], pred_label_seq):
             print >>outfile, pred_label, " ".join(["%.4f"%val for val in clause_weights[-clauselen:]])
+          print >>outfile
+      else:
+        for pred_label_seq in pred_label_seqs:
+          for pred_label in pred_label_seq:
+            print >>outfile, pred_label
           print >>outfile
