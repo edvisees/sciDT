@@ -1,3 +1,4 @@
+import warnings
 import sys
 import codecs
 import numpy
@@ -28,8 +29,9 @@ class PassageTagger(object):
       self.label_ind = {"none": 0}
     else:
       self.label_ind = label_ind
+    seq_lengths = [len(seq) for seq in str_seqs]
     if not maxseqlen:
-      maxseqlen = max([len(label_seq) for label_seq in label_seqs])
+      maxseqlen = max(seq_lengths)
     if not maxclauselen:
       if use_attention:
         clauselens = []
@@ -81,7 +83,7 @@ class PassageTagger(object):
         y[i][y_ind_i] = 1
       Y.append(y) 
     self.rev_label_ind = {i: l for (l, i) in self.label_ind.items()}
-    return numpy.asarray(X), numpy.asarray(Y)
+    return seq_lengths, numpy.asarray(X), numpy.asarray(Y)
 
   def get_attention_weights(self, X_test):
     if not self.tagger:
@@ -97,20 +99,23 @@ class PassageTagger(object):
     f = theano.function([inp], att_out)
     return f(X_test)
 
-  def predict(self, X, bidirectional, tagger=None):
+  def predict(self, X, bidirectional, test_seq_lengths=None, tagger=None):
     if not tagger:
       tagger = self.tagger
     if not tagger:
       raise RuntimeError, "Tagger not trained yet!"
-    # Determining actual lengths sans padding
-    x_lens = []
-    for x in X:
-      x_len = 0
-      for i, xi in enumerate(x):
-        if xi.sum() != 0:
-          x_len = len(x) - i
-          break
-      x_lens.append(x_len)
+    if test_seq_lengths is None:
+      # Determining actual lengths sans padding
+      x_lens = []
+      for x in X:
+        x_len = 0
+        for i, xi in enumerate(x):
+          if xi.sum() != 0:
+            x_len = len(x) - i
+            break
+        x_lens.append(x_len)
+    else:
+        x_lens = test_seq_lengths
     if bidirectional:
       pred_probs = tagger.predict({'input':X})['output']
     else:
@@ -119,6 +124,13 @@ class PassageTagger(object):
     pred_label_seqs = []
     for pred_ind, x_len in zip(pred_inds, x_lens):
       pred_label_seq = [self.rev_label_ind[pred] for pred in pred_ind][-x_len:]
+      # If the following number is positive, it means we ignored some clauses in the test passage to make it the same length as the ones we trained on.
+      num_ignored_clauses = max(0, x_len - len(pred_label_seq))
+      # Make labels for those if needed.
+      if num_ignored_clauses > 0:
+        warnings.warn("Test sequence too long. Ignoring %d clauses at the beginning and labeling them none." % num_ignored_clauses)
+        ignored_clause_labels = ["none"] * num_ignored_clauses
+        pred_label_seq = ignored_clause_labels + pred_label_seq
       pred_label_seqs.append(pred_label_seq)
     return pred_probs, pred_label_seqs, x_lens
 
@@ -168,7 +180,7 @@ class PassageTagger(object):
       fscores = []
       for fold_num, ((train_fold_X, train_fold_Y), (test_fold_X, test_fold_Y)) in enumerate(cv_folds):
         tagger = self.fit_model(train_fold_X, train_fold_Y, use_attention, att_context, bidirectional)
-        pred_probs, pred_label_seqs, x_lens = self.predict(test_fold_X, bidirectional, tagger)
+        pred_probs, pred_label_seqs, x_lens = self.predict(test_fold_X, bidirectional, tagger=tagger)
         pred_inds = numpy.argmax(pred_probs, axis=2)
         flattened_preds = []
         flattened_targets = []
@@ -229,7 +241,8 @@ if __name__ == "__main__":
 
   nnt = PassageTagger(repfile)
   if train:
-    X, Y = nnt.make_data(trainfile, use_attention, train=True)
+    # First returned value is sequence lengths (without padding)
+    _, X, Y = nnt.make_data(trainfile, use_attention, train=True)
     nnt.train(X, Y, use_attention, att_context, bid, cv=False)
   if test:
     if train:
@@ -261,9 +274,9 @@ if __name__ == "__main__":
       print >>sys.stderr, "Predicting on file %s"%(test_file)
       test_out_file_name = test_file.split("/")[-1].replace(".txt", "")+"_att=%s_cont=%s_bid=%s"%(str(use_attention), att_context, str(bid))+".out"
       outfile = open(test_out_file_name, "w")
-      X_test, _ = nnt.make_data(test_file, use_attention, maxseqlen=maxseqlen, maxclauselen=maxclauselen, label_ind=label_ind, train=False)
+      test_seq_lengths, X_test, _ = nnt.make_data(test_file, use_attention, maxseqlen=maxseqlen, maxclauselen=maxclauselen, label_ind=label_ind, train=False)
       print >>sys.stderr, "X_test shape:", X_test.shape
-      pred_probs, pred_label_seqs, _ = nnt.predict(X_test, bid)
+      pred_probs, pred_label_seqs, _ = nnt.predict(X_test, bid, test_seq_lengths)
       if show_att:
         att_weights = nnt.get_attention_weights(X_test.astype('float32'))
         clause_seqs, _ = read_passages(test_file, False)
