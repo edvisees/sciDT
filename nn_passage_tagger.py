@@ -12,6 +12,7 @@ from util import read_passages, evaluate, make_folds
 from keras.models import Sequential, Graph, model_from_json
 from keras.layers.core import TimeDistributedDense, Dropout
 from keras.layers.recurrent import LSTM, GRU
+from keras.callbacks import EarlyStopping
 
 from attention import TensorAttention
 from keras_extensions import HigherOrderTimeDistributedDense
@@ -136,6 +137,7 @@ class PassageTagger(object):
 
   def fit_model(self, X, Y, use_attention, att_context, bidirectional):
     print >>sys.stderr, "Input shape:", X.shape, Y.shape
+    early_stopping = EarlyStopping(patience = 2)
     num_classes = len(self.label_ind)
     if bidirectional:
       tagger = Graph()
@@ -151,7 +153,7 @@ class PassageTagger(object):
       tagger.add_output(name='output', input='softmax')
       print >>sys.stderr, tagger.summary()
       tagger.compile('adam', {'output':'categorical_crossentropy'})
-      tagger.fit({'input':X, 'output':Y})
+      tagger.fit({'input':X, 'output':Y}, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=20)
     else:
       tagger = Sequential()
       word_proj_dim = 50
@@ -169,7 +171,7 @@ class PassageTagger(object):
       tagger.add(TimeDistributedDense(num_classes, activation='softmax'))
       print >>sys.stderr, tagger.summary()
       tagger.compile(loss='categorical_crossentropy', optimizer='adam')
-      tagger.fit(X, Y, batch_size=10)
+      tagger.fit(X, Y, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=20)
 
     return tagger
 
@@ -214,6 +216,7 @@ if __name__ == "__main__":
   argparser = argparse.ArgumentParser(description="Train, cross-validate and run LSTM discourse tagger")
   argparser.add_argument('repfile', metavar='REP-FILE', type=str, help="Gzipped word embedding file")
   argparser.add_argument('--train_file', type=str, help="Training file. One clause<tab>label per line and passages separated by blank lines.")
+  argparser.add_argument('--cv', help="Do cross validation", action='store_true')
   argparser.add_argument('--test_files', metavar="TESTFILE", type=str, nargs='+', help="Test file name(s), separated by space. One clause per line and passages separated by blank lines.")
   argparser.add_argument('--use_attention', help="Use attention over words? Or else will average their representations", action='store_true')
   argparser.add_argument('--att_context', type=str, help="Context to look at for determining attention (word/clause)")
@@ -243,7 +246,7 @@ if __name__ == "__main__":
   if train:
     # First returned value is sequence lengths (without padding)
     _, X, Y = nnt.make_data(trainfile, use_attention, train=True)
-    nnt.train(X, Y, use_attention, att_context, bid, cv=False)
+    nnt.train(X, Y, use_attention, att_context, bid, cv=args.cv)
   if test:
     if train:
       label_ind = nnt.label_ind
