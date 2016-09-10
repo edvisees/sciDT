@@ -5,6 +5,7 @@ import numpy
 import argparse
 import theano
 import json
+import pickle
 
 from rep_reader import RepReader
 from util import read_passages, evaluate, make_folds
@@ -208,9 +209,11 @@ class PassageTagger(object):
     model_config_file = open("model_%s_config.json"%model_ext, "w")
     model_weights_file_name = "model_%s_weights"%model_ext
     model_label_ind = "model_%s_label_ind.json"%model_ext
+    model_rep_reader = "model_%s_rep_reader.pkl"%model_ext
     print >>model_config_file, self.tagger.to_json()
-    self.tagger.save_weights(model_weights_file_name)
+    self.tagger.save_weights(model_weights_file_name, overwrite=True)
     json.dump(self.label_ind, open(model_label_ind, "w"))
+    pickle.dump(self.rep_reader, model_rep_reader)
 
 if __name__ == "__main__":
   argparser = argparse.ArgumentParser(description="Train, cross-validate and run LSTM discourse tagger")
@@ -256,6 +259,7 @@ if __name__ == "__main__":
       model_config_file = open("model_%s_config.json"%model_ext, "r")
       model_weights_file_name = "model_%s_weights"%model_ext
       model_label_ind = "model_%s_label_ind.json"%model_ext
+      model_rep_reader = "model_%s_rep_reader.pkl"%model_ext
       nnt.tagger = model_from_json(model_config_file.read(), custom_objects={"TensorAttention":TensorAttention, "HigherOrderTimeDistributedDense":HigherOrderTimeDistributedDense})
       print >>sys.stderr, "Loaded model:"
       print >>sys.stderr, nnt.tagger.summary()
@@ -264,6 +268,7 @@ if __name__ == "__main__":
       label_ind_json = json.load(open(model_label_ind))
       label_ind = {k: int(label_ind_json[k]) for k in label_ind_json}
       print >>sys.stderr, "Loaded label index:", label_ind
+      nnt.rep_reader = pickle.load(model_rep_reader)
     if not use_attention:
       assert nnt.tagger.layers[0].name == "timedistributeddense"
       maxseqlen = nnt.tagger.layers[0].input_length
