@@ -19,14 +19,19 @@ from attention import TensorAttention
 from keras_extensions import HigherOrderTimeDistributedDense
 
 class PassageTagger(object):
-  def __init__(self, word_rep_file):
-    self.rep_reader = RepReader(word_rep_file)
+  def __init__(self, word_rep_file=None, pickled_rep_reader=None):
+    if pickled_rep_reader:
+      self.rep_reader = pickled_rep_reader
+    elif word_rep_file:
+      self.rep_reader = RepReader(word_rep_file)
     self.input_size = self.rep_reader.rep_shape[0]
     self.tagger = None
 
   def make_data(self, trainfilename, use_attention, maxseqlen=None, maxclauselen=None, label_ind=None, train=False):
     print >>sys.stderr, "Reading data.."
-    str_seqs, label_seqs = read_passages(trainfilename, train)
+    str_seqs, label_seqs = read_passages(trainfilename, is_labeled=True)
+    print >>sys.stderr, "Sample data for train:" if train else "Sample data for test:"
+    print >>sys.stderr, zip(str_seqs[0], label_seqs[0])
     if not label_ind:
       self.label_ind = {"none": 0}
     else:
@@ -43,6 +48,8 @@ class PassageTagger(object):
     X = []
     Y = []
     Y_inds = []
+    init_word_rep_len = len(self.rep_reader.word_rep)
+    all_word_types = set([])
     for str_seq, label_seq in zip(str_seqs, label_seqs):
       for label in label_seq:
         if label not in self.label_ind:
@@ -60,6 +67,8 @@ class PassageTagger(object):
       if train:
         for i, (clause, label) in enumerate(zip(str_seq, label_seq)):
           clause_rep = self.rep_reader.get_clause_rep(clause)
+          for word in clause.split():
+            all_word_types.add(word)
           if use_attention:
             if len(clause_rep) > maxclauselen:
               clause_rep = clause_rep[:maxclauselen]
@@ -72,6 +81,8 @@ class PassageTagger(object):
       else:
         for i, clause in enumerate(str_seq):
           clause_rep = self.rep_reader.get_clause_rep(clause)
+          for word in clause.split():
+            all_word_types.add(word)
           if use_attention:
             if len(clause_rep) > maxclauselen:
               clause_rep = clause_rep[:maxclauselen]
@@ -79,6 +90,9 @@ class PassageTagger(object):
           else:
             x[-seq_len+i] = numpy.mean(clause_rep, axis=0)
         X.append(x)
+    final_word_rep_len = len(self.rep_reader.word_rep)
+    oov_ratio = float(final_word_rep_len - init_word_rep_len)/len(all_word_types)
+    print >>sys.stderr, "OOV ratio: %f" % oov_ratio
     for y_ind in Y_inds:
       y = numpy.zeros((maxseqlen, len(self.label_ind)))
       for i, y_ind_i in enumerate(y_ind):
@@ -154,7 +168,7 @@ class PassageTagger(object):
       tagger.add_output(name='output', input='softmax')
       print >>sys.stderr, tagger.summary()
       tagger.compile('adam', {'output':'categorical_crossentropy'})
-      tagger.fit({'input':X, 'output':Y}, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=20)
+      tagger.fit({'input':X, 'output':Y}, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=50)
     else:
       tagger = Sequential()
       word_proj_dim = 50
@@ -172,7 +186,7 @@ class PassageTagger(object):
       tagger.add(TimeDistributedDense(num_classes, activation='softmax'))
       print >>sys.stderr, tagger.summary()
       tagger.compile(loss='categorical_crossentropy', optimizer='adam')
-      tagger.fit(X, Y, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=20)
+      tagger.fit(X, Y, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=50)
 
     return tagger
 
@@ -213,11 +227,11 @@ class PassageTagger(object):
     print >>model_config_file, self.tagger.to_json()
     self.tagger.save_weights(model_weights_file_name, overwrite=True)
     json.dump(self.label_ind, open(model_label_ind, "w"))
-    pickle.dump(self.rep_reader, model_rep_reader)
+    pickle.dump(self.rep_reader, open(model_rep_reader, "wb"))
 
 if __name__ == "__main__":
   argparser = argparse.ArgumentParser(description="Train, cross-validate and run LSTM discourse tagger")
-  argparser.add_argument('repfile', metavar='REP-FILE', type=str, help="Gzipped word embedding file")
+  argparser.add_argument('--repfile', type=str, help="Gzipped word embedding file")
   argparser.add_argument('--train_file', type=str, help="Training file. One clause<tab>label per line and passages separated by blank lines.")
   argparser.add_argument('--cv', help="Do cross validation", action='store_true')
   argparser.add_argument('--test_files', metavar="TESTFILE", type=str, nargs='+', help="Test file name(s), separated by space. One clause per line and passages separated by blank lines.")
@@ -231,6 +245,7 @@ if __name__ == "__main__":
   if args.train_file:
     trainfile = args.train_file
     train = True
+    assert args.repfile is not None, "Word embedding file required for training."
   else:
     train = False
   if args.test_files:
@@ -245,9 +260,9 @@ if __name__ == "__main__":
   bid = args.bidirectional
   show_att = args.show_attention
 
-  nnt = PassageTagger(repfile)
   if train:
     # First returned value is sequence lengths (without padding)
+    nnt = PassageTagger(word_rep_file=repfile)
     _, X, Y = nnt.make_data(trainfile, use_attention, train=True)
     nnt.train(X, Y, use_attention, att_context, bid, cv=args.cv)
   if test:
@@ -260,6 +275,9 @@ if __name__ == "__main__":
       model_weights_file_name = "model_%s_weights"%model_ext
       model_label_ind = "model_%s_label_ind.json"%model_ext
       model_rep_reader = "model_%s_rep_reader.pkl"%model_ext
+      rep_reader = pickle.load(open(model_rep_reader, "rb"))
+      print >>sys.stderr, "Loaded pickled rep reader"
+      nnt = PassageTagger(pickled_rep_reader=rep_reader)
       nnt.tagger = model_from_json(model_config_file.read(), custom_objects={"TensorAttention":TensorAttention, "HigherOrderTimeDistributedDense":HigherOrderTimeDistributedDense})
       print >>sys.stderr, "Loaded model:"
       print >>sys.stderr, nnt.tagger.summary()
@@ -268,7 +286,6 @@ if __name__ == "__main__":
       label_ind_json = json.load(open(model_label_ind))
       label_ind = {k: int(label_ind_json[k]) for k in label_ind_json}
       print >>sys.stderr, "Loaded label index:", label_ind
-      nnt.rep_reader = pickle.load(model_rep_reader)
     if not use_attention:
       assert nnt.tagger.layers[0].name == "timedistributeddense"
       maxseqlen = nnt.tagger.layers[0].input_length
@@ -287,7 +304,7 @@ if __name__ == "__main__":
       pred_probs, pred_label_seqs, _ = nnt.predict(X_test, bid, test_seq_lengths)
       if show_att:
         att_weights = nnt.get_attention_weights(X_test.astype('float32'))
-        clause_seqs, _ = read_passages(test_file, False)
+        clause_seqs, _ = read_passages(test_file, is_labeled=True)
         paralens = [[len(clause.split()) for clause in seq] for seq in clause_seqs]
         for clauselens, sample_att_weights, pred_label_seq in zip(paralens, att_weights, pred_label_seqs):
           for clauselen, clause_weights, pred_label in zip(clauselens, sample_att_weights[-len(clauselens):], pred_label_seq):

@@ -1,7 +1,7 @@
 import codecs
 import numpy
 
-def read_passages(filename, do_train):
+def read_passages(filename, is_labeled):
   str_seqs = []
   str_seq = []
   label_seqs = []
@@ -15,7 +15,7 @@ def read_passages(filename, do_train):
         label_seqs.append(label_seq)
         label_seq = []
     else:
-      if do_train:
+      if is_labeled:
         clause, label = lnstrp.split("\t")
         label_seq.append(label)
       else:
