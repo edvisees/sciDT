@@ -166,9 +166,9 @@ class PassageTagger(object):
       tagger.add_node(LSTM(X.shape[-1]/2, return_sequences=True, go_backwards=True), name='backward', input=lstm_input_node)
       tagger.add_node(TimeDistributedDense(num_classes, activation='softmax'), name='softmax', inputs=['forward', 'backward'], merge_mode='concat', concat_axis=-1)
       tagger.add_output(name='output', input='softmax')
-      print >>sys.stderr, tagger.summary()
+      tagger.summary()
       tagger.compile('adam', {'output':'categorical_crossentropy'})
-      tagger.fit({'input':X, 'output':Y}, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=50)
+      tagger.fit({'input':X, 'output':Y}, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=100, batch_size=10)
     else:
       tagger = Sequential()
       word_proj_dim = 50
@@ -184,9 +184,9 @@ class PassageTagger(object):
         tagger.add(TimeDistributedDense(input_dim=input_dim, input_length=input_len, output_dim=word_proj_dim))
       tagger.add(LSTM(input_dim=word_proj_dim, output_dim=word_proj_dim, input_length=input_len, return_sequences=True))
       tagger.add(TimeDistributedDense(num_classes, activation='softmax'))
-      print >>sys.stderr, tagger.summary()
+      tagger.summary()
       tagger.compile(loss='categorical_crossentropy', optimizer='adam')
-      tagger.fit(X, Y, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, nb_epoch=50)
+      tagger.fit(X, Y, validation_split=0.1, callbacks=[early_stopping], show_accuracy=True, batch_size=10)
 
     return tagger
 
