@@ -1,10 +1,10 @@
-# Scientific Discourse Parser (SciDP)
-LSTM based sequence labeling model for scientific discourse parsing
+# Scientific Discourse Tagger (SciDT)
+LSTM based sequence labeling model for scientific discourse tagger
 
 ## Requirements
 * Theano (tested with v0.8.0)
 * Keras (tested with v0.3.2)
-* Pretrained word embedding (recommended: http://bio.nlplab.org/#word-vectors): SciDP expects a gzipped embedding file with each line containing word and a the vector (list of floats) separated by spaces
+* Pretrained word embedding (recommended: http://bio.nlplab.org/#word-vectors): SciDT expects a gzipped embedding file with each line containing word and a the vector (list of floats) separated by spaces
 
 ## Training
 ```
