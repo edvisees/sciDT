@@ -29,7 +29,7 @@ class PassageTagger(object):
 
   def make_data(self, trainfilename, use_attention, maxseqlen=None, maxclauselen=None, label_ind=None, train=False):
     print >>sys.stderr, "Reading data.."
-    str_seqs, label_seqs = read_passages(trainfilename, is_labeled=True)
+    str_seqs, label_seqs = read_passages(trainfilename, is_labeled=train)
     print >>sys.stderr, "Sample data for train:" if train else "Sample data for test:"
     print >>sys.stderr, zip(str_seqs[0], label_seqs[0])
     if not label_ind:
@@ -63,7 +63,7 @@ class PassageTagger(object):
       # The following conditional is true only when we've already trained, and one of the sequences in the test set is longer than the longest sequence in training.
       if seq_len > maxseqlen:
         str_seq = str_seq[:maxseqlen]
-        seq_len = maxseqlen 
+        seq_len = maxseqlen
       if train:
         for i, (clause, label) in enumerate(zip(str_seq, label_seq)):
           clause_rep = self.rep_reader.get_clause_rep(clause)
@@ -97,7 +97,7 @@ class PassageTagger(object):
       y = numpy.zeros((maxseqlen, len(self.label_ind)))
       for i, y_ind_i in enumerate(y_ind):
         y[i][y_ind_i] = 1
-      Y.append(y) 
+      Y.append(y)
     self.rev_label_ind = {i: l for (l, i) in self.label_ind.items()}
     return seq_lengths, numpy.asarray(X), numpy.asarray(Y)
 
