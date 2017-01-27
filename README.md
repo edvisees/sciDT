@@ -8,7 +8,7 @@ LSTM based sequence labeling model for scientific discourse tagger
 
 ## Training
 ```
-python nn_passage_tagger.py REPFILE --train_file TRAINFILE --use_attention
+python nn_passage_tagger.py --repfile REPFILE --train_file TRAINFILE --use_attention
 ```
 where `REPFILE` is the embedding file. `--use_attention` is recommended. Check out the help messages for `nn_passage_tagger.py` for more options
 
