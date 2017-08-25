@@ -13,7 +13,7 @@ If you are training, the file additionally needs labels at the clause level, whi
 
 
 ## Intended Usage
-As mentioned in the paper, the model is intended for tagging discourse elements in experiment narratives in biomedical research papers, and we use the seven label taxonomy described in [De Waard and Pander Maat (2012)][http://www.sciencedirect.com/science/article/pii/S1475158512000471]. The taxonomy is defined at the clause level, which is why we assume that each line in the input file is a clause. However, the model itself is more general than this, and can be put to use for tagging other kinds of discourse elements as well, even at the sentence level. If you find other uses for this code, I would love to hear about it!
+As mentioned in the paper, the model is intended for tagging discourse elements in experiment narratives in biomedical research papers, and we use the seven label taxonomy described in [De Waard and Pander Maat (2012)](http://www.sciencedirect.com/science/article/pii/S1475158512000471). The taxonomy is defined at the clause level, which is why we assume that each line in the input file is a clause. However, the model itself is more general than this, and can be put to use for tagging other kinds of discourse elements as well, even at the sentence level. If you find other uses for this code, I would love to hear about it!
 
 ## Training
 ```
