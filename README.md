@@ -1,10 +1,19 @@
 # Scientific Discourse Tagger (SciDT)
-LSTM based sequence labeling model for scientific discourse tagger
+LSTM based sequence labeling model for scientific discourse tagger. Read the [paper](https://arxiv.org/abs/1702.05398) for more details.
 
 ## Requirements
 * Theano (tested with v0.8.0)
 * Keras (tested with v0.3.2)
 * Pretrained word embedding (recommended: http://bio.nlplab.org/#word-vectors): SciDT expects a gzipped embedding file with each line containing word and a the vector (list of floats) separated by spaces
+
+## Input Format
+SciDT expects inputs to lists of clauses, with paragraph boundaries identified, i.e., each line in the input file needs to be a clause and and paragraphs should be separated by blank lines.
+
+If you are training, the file additionally needs labels at the clause level, which can be specified on each line, after the clause, separated by a tab. Please look at the sample [train](https://github.com/edvisees/sciDT/blob/master/toy_train.txt) and [test](https://github.com/edvisees/sciDT/blob/master/toy_test.txt) files for the expected format.
+
+
+## Intended Usage
+As mentioned in the paper, the model is intended for tagging discourse elements in experiment narratives in biomedical research papers, and we use the seven label taxonomy described in [De Waard and Pander Maat (2012)][http://www.sciencedirect.com/science/article/pii/S1475158512000471]. The taxonomy is defined at the clause level, which is why we assume that each line in the input file is a clause. However, the model itself is more general than this, and can be put to use for tagging other kinds of discourse elements as well, even at the sentence level. If you find other uses for this code, I would love to hear about it!
 
 ## Training
 ```
